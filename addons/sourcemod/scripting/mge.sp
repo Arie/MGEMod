@@ -207,6 +207,8 @@ public void OnPluginStart()
     RegConsoleCmd("r", Command_Ready, "Mark yourself as ready for 2v2 match");
     
     AddCommandListener(Command_DropItem, "dropitem");
+    AddCommandListener(Command_SpecNavigation, "spec_next");
+    AddCommandListener(Command_SpecNavigation, "spec_prev");
 
     // HUD synchronizers
     hm_HP           = CreateHudSynchronizer();
