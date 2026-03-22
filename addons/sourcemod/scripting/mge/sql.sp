@@ -162,7 +162,7 @@ void SQLDbConnTest(Database db, DBResultSet results, const char[] error, any dat
                     db.Escape(steamid_dirty, steamid, sizeof(steamid));
                     strcopy(g_sPlayerSteamID[i], 32, steamid);
                     GetSelectPlayerStatsQuery(query, sizeof(query), steamid);
-                    db.Query(SQL_OnPlayerReceived, query, i);
+                    db.Query(SQL_OnPlayerReceived, query, GetClientUserId(i));
                     
                     // Handle hot-loading case: initialize client state that requires DB
                     if (!IsFakeClient(i))
@@ -224,11 +224,16 @@ void SQL_OnTestReceived(Database db, DBResultSet results, const char[] error, an
 // Handles player statistics retrieval from database and creates new player records if needed
 void SQL_OnPlayerReceived(Database db, DBResultSet results, const char[] error, any data)
 {
-    int client = data;
+    int userid = data;
+    int client = GetClientOfUserId(userid);
+    
+    if (client == 0)
+        return;
 
     if (db == null)
     {
-        LogError("SQL_OnPlayerReceived failed: database connection lost");
+        LogError("SQL_OnPlayerReceived failed: database connection lost for client %d", client);
+        ScheduleEloRetry(client);
         return;
     }
     
@@ -236,19 +241,19 @@ void SQL_OnPlayerReceived(Database db, DBResultSet results, const char[] error, 
     {
         LogError("SQL_OnPlayerReceived FAILED for client %d (%s): %s", 
                  client, g_sPlayerSteamID[client], error);
+        ScheduleEloRetry(client);
         return;
     }
 
-    if ( client < 1 || client > MaxClients || !IsClientConnected(client) )
-    {
-        LogError("SQL_OnPlayerReceived failed: client %d <%s> is invalid.", client, g_sPlayerSteamID[client]);
+    if (!IsClientConnected(client))
         return;
-    }
 
     char query[512];
     char namesql_dirty[MAX_NAME_LENGTH], namesql[(MAX_NAME_LENGTH * 2) + 1];
     GetClientName(client, namesql_dirty, sizeof(namesql_dirty));
     db.Escape(namesql_dirty, namesql, sizeof(namesql));
+
+    g_iEloRetryCount[client] = 0;
 
     if (results.FetchRow())
     {

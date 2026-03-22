@@ -4,6 +4,9 @@
 // Sounds
 #define DEFAULT_COUNTDOWN_TIME 3
 
+#define MAX_ELO_RETRIES         5
+#define ELO_RETRY_BASE_DELAY    3.0
+
 #define MODEL_POINT             "models/props_gameplay/cap_point_base.mdl"
 #define MODEL_BRIEFCASE         "models/flag/briefcase.mdl"
 #define MODEL_AMMOPACK          "models/items/ammopack_small.mdl"
@@ -177,6 +180,9 @@ bool
     g_bCanPlayerSwap        [MAXPLAYERS + 1],
     g_bCanPlayerGetIntel    [MAXPLAYERS + 1],
     g_bPlayerEloVerified    [MAXPLAYERS + 1]; // ELO loaded from authenticated Steam account
+
+Handle g_hEloRetryTimer     [MAXPLAYERS + 1];
+int g_iEloRetryCount        [MAXPLAYERS + 1];
 
 int
     g_iPlayerArena          [MAXPLAYERS + 1],

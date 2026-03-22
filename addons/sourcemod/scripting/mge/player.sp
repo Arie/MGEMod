@@ -6,7 +6,8 @@ void HandleClientConnection(int client)
     if (IsFakeClient(client))
         return;
         
-    // Initialize basic client state immediately (Steam-independent)
+    CancelEloRetry(client);
+    
     ChangeClientTeam(client, TEAM_SPEC);
     g_bShowHud[client] = true;
     g_bPlayerRestoringAmmo[client] = false;
@@ -66,7 +67,8 @@ void HandleClientAuthentication(int client)
 // Handle client disconnection and cleanup
 void HandleClientDisconnection(int client)
 {
-    // We ignore the kick queue check for this function only so that clients that get kicked still get their elo calculated
+    CancelEloRetry(client);
+    
     if (IsValidClient(client, true) && g_iPlayerArena[client])
     {
         RemoveFromQueue(client, true);
@@ -154,31 +156,82 @@ void TryLoadPlayerStats(int client, bool isRetry)
     if (g_bNoStats || !IsValidClient(client))
         return;
     
+    if (g_DB == null)
+    {
+        if (isRetry)
+            ScheduleEloRetry(client);
+        return;
+    }
+    
     char steamid_dirty[31], steamid[64], query[256];
     
-    // Get Steam ID and validate the operation succeeded
     if (!GetClientAuthId(client, AuthId_Steam2, steamid_dirty, sizeof(steamid_dirty))) {
         if (isRetry) {
-            LogError("Failed to get Steam ID for client %d even after Steam auth - stats loading failed", client);
-            g_bPlayerEloVerified[client] = false;
+            LogError("Failed to get Steam ID for client %d after Steam auth, scheduling retry", client);
+            ScheduleEloRetry(client);
         }
         return;
     }
     
     g_DB.Escape(steamid_dirty, steamid, sizeof(steamid));
     
-    // Skip if stats already loaded successfully for this specific Steam ID
     if (g_bPlayerEloVerified[client] && StrEqual(g_sPlayerSteamID[client], steamid)) {
-        if (isRetry) {
-            LogMessage("Stats already loaded for client %d (%s), skipping retry", client, steamid);
-        }
         return;
     }
     
     strcopy(g_sPlayerSteamID[client], 32, steamid);
     
     GetSelectPlayerStatsQuery(query, sizeof(query), steamid);
-    g_DB.Query(SQL_OnPlayerReceived, query, client);
+    g_DB.Query(SQL_OnPlayerReceived, query, GetClientUserId(client));
+}
+
+void ScheduleEloRetry(int client)
+{
+    if (!IsValidClient(client) || IsFakeClient(client))
+        return;
+    
+    g_iEloRetryCount[client]++;
+    
+    if (g_iEloRetryCount[client] > MAX_ELO_RETRIES)
+    {
+        LogError("ELO load for client %d failed after %d retries, giving up", client, MAX_ELO_RETRIES);
+        return;
+    }
+    
+    CancelEloRetry(client, false);
+    
+    float delay = ELO_RETRY_BASE_DELAY * Pow(2.0, float(g_iEloRetryCount[client] - 1));
+    g_hEloRetryTimer[client] = CreateTimer(delay, Timer_RetryEloLoad, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+    
+    LogMessage("Scheduling ELO retry %d/%d for client %d in %.0fs", g_iEloRetryCount[client], MAX_ELO_RETRIES, client, delay);
+}
+
+void CancelEloRetry(int client, bool resetCount = true)
+{
+    if (g_hEloRetryTimer[client] != null)
+    {
+        delete g_hEloRetryTimer[client];
+        g_hEloRetryTimer[client] = null;
+    }
+    
+    if (resetCount)
+        g_iEloRetryCount[client] = 0;
+}
+
+Action Timer_RetryEloLoad(Handle timer, int userid)
+{
+    int client = GetClientOfUserId(userid);
+    
+    if (client == 0)
+        return Plugin_Stop;
+    
+    g_hEloRetryTimer[client] = null;
+    
+    if (g_bPlayerEloVerified[client])
+        return Plugin_Stop;
+    
+    TryLoadPlayerStats(client, true);
+    return Plugin_Stop;
 }
 
 // Validates if player's ELO is verified and safe for arena play

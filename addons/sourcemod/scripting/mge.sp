@@ -266,7 +266,7 @@ void HandleHotReload()
                         g_DB.Escape(steamid_dirty, steamid, sizeof(steamid));
                         strcopy(g_sPlayerSteamID[i], 32, steamid);
                         GetSelectPlayerStatsQuery(query, sizeof(query), steamid);
-                        g_DB.Query(SQL_OnPlayerReceived, query, i);
+                        g_DB.Query(SQL_OnPlayerReceived, query, GetClientUserId(i));
                     }
                 }
             }
