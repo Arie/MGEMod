@@ -986,7 +986,7 @@ void ShowMainMenu(int client, bool listplayers = true)
                 if (IsValidClient(g_iArenaQueue[i][j]))
                     Format(report, sizeof(report), "%s\x04%N", report, g_iArenaQueue[i][j]);
             }
-            PrintToChat(client, "%s", report);
+            MC_PrintToChat(client, "%s", report);
         }
     }
 }
@@ -1081,7 +1081,7 @@ void PrintToChatArena(int arena_index, const char[] message, any ...)
         int client = g_iArenaQueue[arena_index][i];
         if (client)
         {
-            PrintToChat(client, buffer);
+            MC_PrintToChat(client, buffer);
         }
     }
 }
