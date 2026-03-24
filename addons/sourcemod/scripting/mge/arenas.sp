@@ -278,11 +278,7 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
 
             if (g_bArenaBBall[arena_index])
             {
-                if (IsValidEdict(g_iBBallIntel[arena_index]) && g_iBBallIntel[arena_index] > 0)
-                {
-                    RemoveEdict(g_iBBallIntel[arena_index]);
-                    g_iBBallIntel[arena_index] = -1;
-                }
+                HideIntel(arena_index);
 
                 RemoveClientParticle(client);
                 g_bPlayerHasIntel[client] = false;
@@ -388,11 +384,7 @@ void RemoveFromQueue(int client, bool calcstats = false, bool specfix = false)
 
             if (g_bArenaBBall[arena_index])
             {
-                if (IsValidEdict(g_iBBallIntel[arena_index]) && g_iBBallIntel[arena_index] > 0)
-                {
-                    RemoveEdict(g_iBBallIntel[arena_index]);
-                    g_iBBallIntel[arena_index] = -1;
-                }
+                HideIntel(arena_index);
 
                 RemoveClientParticle(client);
                 g_bPlayerHasIntel[client] = false;

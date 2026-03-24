@@ -1,6 +1,5 @@
 // ===== ENTITY MANAGEMENT =====
 
-// Setup BBall hoops for all BBall arenas during round start
 void SetupBBallHoops()
 {
     PrecacheModel(MODEL_BRIEFCASE, true);
@@ -20,21 +19,13 @@ void SetupBBallHoops()
             hoop_1_loc[1] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i] - 1][1];
             hoop_1_loc[2] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i] - 1][2];
 
-            if (IsValidEdict(g_iBBallHoop[i][SLOT_ONE]) && g_iBBallHoop[i][SLOT_ONE] > 0)
-            {
-                RemoveEdict(g_iBBallHoop[i][SLOT_ONE]);
-                g_iBBallHoop[i][SLOT_ONE] = -1;
-            } else if (g_iBBallHoop[i][SLOT_ONE] != -1) {
-                g_iBBallHoop[i][SLOT_ONE] = -1;
-            }
+            if (IsValidEntity(g_iBBallHoop[i][SLOT_ONE]) && g_iBBallHoop[i][SLOT_ONE] > 0)
+                RemoveEntity(g_iBBallHoop[i][SLOT_ONE]);
+            g_iBBallHoop[i][SLOT_ONE] = -1;
 
-            if (IsValidEdict(g_iBBallHoop[i][SLOT_TWO]) && g_iBBallHoop[i][SLOT_TWO] > 0)
-            {
-                RemoveEdict(g_iBBallHoop[i][SLOT_TWO]);
-                g_iBBallHoop[i][SLOT_TWO] = -1;
-            } else if (g_iBBallHoop[i][SLOT_TWO] != -1) {
-                g_iBBallHoop[i][SLOT_TWO] = -1;
-            }
+            if (IsValidEntity(g_iBBallHoop[i][SLOT_TWO]) && g_iBBallHoop[i][SLOT_TWO] > 0)
+                RemoveEntity(g_iBBallHoop[i][SLOT_TWO]);
+            g_iBBallHoop[i][SLOT_TWO] = -1;
 
             if (g_iBBallHoop[i][SLOT_ONE] == -1)
             {
@@ -61,66 +52,97 @@ void SetupBBallHoops()
                 AcceptEntityInput(g_iBBallHoop[i][SLOT_ONE], "Disable");
                 AcceptEntityInput(g_iBBallHoop[i][SLOT_TWO], "Disable");
             }
+
+            EnsureBBallIntel(i);
         }
     }
 }
 
-// Reset and recreate the intel entity at appropriate spawn locations for bball gameplay
+int EnsureBBallIntel(int arena_index)
+{
+    int intel = g_iBBallIntel[arena_index];
+    if (IsValidEntity(intel) && intel > 0)
+    {
+        AcceptEntityInput(intel, "Disable");
+        return intel;
+    }
+
+    intel = CreateEntityByName("item_ammopack_small");
+    if (intel == -1)
+    {
+        LogError("[BBall] Arena %d: failed to create intel entity.", arena_index);
+        g_iBBallIntel[arena_index] = -1;
+        return -1;
+    }
+
+    g_iBBallIntel[arena_index] = intel;
+
+    DispatchKeyValue(intel, "powerup_model", MODEL_BRIEFCASE);
+    DispatchSpawn(intel);
+    SetEntProp(intel, Prop_Send, "m_iTeamNum", 1, 4);
+    SetEntPropFloat(intel, Prop_Send, "m_flModelScale", 1.15);
+    SDKHook(intel, SDKHook_StartTouch, OnTouchIntel);
+    AcceptEntityInput(intel, "Disable");
+
+    return intel;
+}
+
+void ShowIntel(int arena_index, float pos[3])
+{
+    int intel = g_iBBallIntel[arena_index];
+
+    if (!IsValidEntity(intel) || intel <= 0)
+    {
+        intel = EnsureBBallIntel(arena_index);
+        if (intel == -1)
+            return;
+    }
+
+    TeleportEntity(intel, pos, NULL_VECTOR, NULL_VECTOR);
+    AcceptEntityInput(intel, "Enable");
+}
+
+void HideIntel(int arena_index)
+{
+    int intel = g_iBBallIntel[arena_index];
+    if (IsValidEntity(intel) && intel > 0)
+        AcceptEntityInput(intel, "Disable");
+}
+
 void ResetIntel(int arena_index, any client = -1)
 {
-    if (g_bArenaBBall[arena_index])
+    if (!g_bArenaBBall[arena_index])
+        return;
+
+    float intel_loc[3];
+
+    if (client != -1)
     {
-        if (IsValidEdict(g_iBBallIntel[arena_index]) && g_iBBallIntel[arena_index] > 0)
+        int client_slot = g_iPlayerSlot[client];
+        g_bPlayerHasIntel[client] = false;
+
+        if (client_slot == SLOT_ONE || client_slot == SLOT_THREE)
         {
-            RemoveEdict(g_iBBallIntel[arena_index]);
-            g_iBBallIntel[arena_index] = -1;
+            intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][0];
+            intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][1];
+            intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][2];
+        } else if (client_slot == SLOT_TWO || client_slot == SLOT_FOUR) {
+            intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][0];
+            intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][1];
+            intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][2];
         }
-
-        if (g_iBBallIntel[arena_index] == -1)
-            g_iBBallIntel[arena_index] = CreateEntityByName("item_ammopack_small");
-        else
-            LogError("[%s] Intel [%i] already exists.", g_sArenaName[arena_index], g_iBBallIntel[arena_index]);
-
-
-        float intel_loc[3];
-
-        if (client != -1)
-        {
-            int client_slot = g_iPlayerSlot[client];
-            g_bPlayerHasIntel[client] = false;
-
-            if (client_slot == SLOT_ONE || client_slot == SLOT_THREE)
-            {
-                intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][0];
-                intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][1];
-                intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][2];
-            } else if (client_slot == SLOT_TWO || client_slot == SLOT_FOUR) {
-                intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][0];
-                intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][1];
-                intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][2];
-            }
-        } else {
-            intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][0];
-            intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][1];
-            intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][2];
-        }
-
-        // Should fix the intel being an ammopack
-        DispatchKeyValue(g_iBBallIntel[arena_index], "powerup_model", MODEL_BRIEFCASE);
-        DispatchSpawn(g_iBBallIntel[arena_index]);
-        TeleportEntity(g_iBBallIntel[arena_index], intel_loc, NULL_VECTOR, NULL_VECTOR);
-        SetEntProp(g_iBBallIntel[arena_index], Prop_Send, "m_iTeamNum", 1, 4);
-        SetEntPropFloat(g_iBBallIntel[arena_index], Prop_Send, "m_flModelScale", 1.15);
-
-        SDKHook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-        AcceptEntityInput(g_iBBallIntel[arena_index], "Enable");
+    } else {
+        intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][0];
+        intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][1];
+        intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][2];
     }
+
+    ShowIntel(arena_index, intel_loc);
 }
 
 
 // ===== EVENT HANDLERS =====
 
-// Handle intel pickup events including particle effects, sound cues, and team notifications
 Action OnTouchIntel(int entity, int other)
 {
     int client = other;
@@ -132,25 +154,22 @@ Action OnTouchIntel(int entity, int other)
         return Plugin_Continue;
 
     int arena_index = g_iPlayerArena[client];
+
+    if (entity != g_iBBallIntel[arena_index])
+        return Plugin_Continue;
+
     g_bPlayerHasIntel[client] = true;
     char msg[64];
     Format(msg, sizeof(msg), "%T", "YouHaveTheIntel", client);
     PrintCenterText(client, msg);
 
-    if (entity == g_iBBallIntel[arena_index] && IsValidEdict(g_iBBallIntel[arena_index]) && g_iBBallIntel[arena_index] > 0)
-    {
-        // SDKUnhook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-        RemoveEdict(g_iBBallIntel[arena_index]);
-        g_iBBallIntel[arena_index] = -1;
-    }
+    HideIntel(arena_index);
 
     int particle;
     TFTeam team = TF2_GetClientTeam(client);
 
-    // Create a fancy lightning effect to make it abundantly clear that the intel has just been picked up.
     AttachParticle(client, team == TFTeam_Red ? "teleported_red" : "teleported_blue", particle);
 
-    // Attach a team-colored particle to give a visual cue that a player is holding the intel, since we can't attach models.
     particle = EntRefToEntIndex(g_iClientParticle[client]);
     if (particle == 0 || !IsValidEntity(particle))
     {
@@ -182,7 +201,6 @@ Action OnTouchIntel(int entity, int other)
     return Plugin_Continue;
 }
 
-// When a hoop is touched by a player in BBall.
 Action OnTouchHoop(int entity, int other)
 {
     int client = other;
@@ -211,7 +229,6 @@ Action OnTouchHoop(int entity, int other)
 
     if (entity == g_iBBallHoop[arena_index][foe_slot] && g_bPlayerHasIntel[client])
     {
-        // Remove the particle effect attached to the player carrying the intel.
         RemoveClientParticle(client);
 
         char foe_name[MAX_NAME_LENGTH];
@@ -249,12 +266,8 @@ Action OnTouchHoop(int entity, int other)
             else if (!g_bNoStats)
                 CalcELO2(client, client_teammate, foe, foe_teammate);
 
-            if (IsValidEdict(g_iBBallIntel[arena_index]) && g_iBBallIntel[arena_index] > -1)
-            {
-                // SDKUnhook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-                RemoveEdict(g_iBBallIntel[arena_index]);
-                g_iBBallIntel[arena_index] = -1;
-            }
+            HideIntel(arena_index);
+
             if (g_bFourPersonArena[arena_index] && g_iArenaQueue[arena_index][SLOT_FOUR + 1])
             {
                 RemoveFromQueue(foe, false);
@@ -296,7 +309,6 @@ Action OnTouchHoop(int entity, int other)
 
         if (g_bFourPersonArena[arena_index])
         {
-            // This shouldn't be necessary but I'm getting invalid clients for some reason.
             if (IsValidClient(client_teammate))
                 EmitSoundToClient(client_teammate, "vo/intel_teamcaptured.mp3");
             if (IsValidClient(foe_teammate))
@@ -308,13 +320,14 @@ Action OnTouchHoop(int entity, int other)
     return Plugin_Continue;
 }
 
-// Handles intel dropping when a BBall player dies
 void HandleBBallPlayerDeath(int victim, int killer, int arena_index)
 {
     if (!g_bPlayerHasIntel[victim])
         return;
-        
+
     g_bPlayerHasIntel[victim] = false;
+    RemoveClientParticle(victim);
+
     float pos[3];
     GetClientAbsOrigin(victim, pos);
     float dist = DistanceAboveGround(victim);
@@ -323,21 +336,8 @@ void HandleBBallPlayerDeath(int victim, int killer, int arena_index)
     else
         pos[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][2];
 
-    if (g_iBBallIntel[arena_index] == -1)
-        g_iBBallIntel[arena_index] = CreateEntityByName("item_ammopack_small");
-    else
-        LogError("[%s] Player died with intel, but intel [%i] already exists.", g_sArenaName[arena_index], g_iBBallIntel[arena_index]);
+    ShowIntel(arena_index, pos);
 
-    // Configure intel entity properties
-    DispatchKeyValue(g_iBBallIntel[arena_index], "powerup_model", MODEL_BRIEFCASE);
-    TeleportEntity(g_iBBallIntel[arena_index], pos, NULL_VECTOR, NULL_VECTOR);
-    DispatchSpawn(g_iBBallIntel[arena_index]);
-    SetEntProp(g_iBBallIntel[arena_index], Prop_Send, "m_iTeamNum", 1, 4);
-    SetEntPropFloat(g_iBBallIntel[arena_index], Prop_Send, "m_flModelScale", 1.15);
-    SDKHook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-    AcceptEntityInput(g_iBBallIntel[arena_index], "Enable");
-
-    // Play intel drop sounds
     EmitSoundToClient(victim, "vo/intel_teamdropped.mp3");
     if (IsValidClient(killer))
         EmitSoundToClient(killer, "vo/intel_enemydropped.mp3");
@@ -346,7 +346,6 @@ void HandleBBallPlayerDeath(int victim, int killer, int arena_index)
 
 // ===== COMMANDS =====
 
-// When a player drops the intel in BBall
 Action Command_DropItem(int client, const char[] command, int argc)
 {
     int arena_index = g_iPlayerArena[client];
@@ -364,27 +363,13 @@ Action Command_DropItem(int client, const char[] command, int argc)
             else
                 pos[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][2];
 
-            if (g_iBBallIntel[arena_index] == -1)
-                g_iBBallIntel[arena_index] = CreateEntityByName("item_ammopack_small");
-            else
-                LogError("[%s] Player dropped the intel, but intel [%i] already exists.", g_sArenaName[arena_index], g_iBBallIntel[arena_index]);
-
-            // This should fix the ammopack not being turned into a briefcase
-            DispatchKeyValue(g_iBBallIntel[arena_index], "powerup_model", MODEL_BRIEFCASE);
-            TeleportEntity(g_iBBallIntel[arena_index], pos, NULL_VECTOR, NULL_VECTOR);
-            DispatchSpawn(g_iBBallIntel[arena_index]);
-            SetEntProp(g_iBBallIntel[arena_index], Prop_Send, "m_iTeamNum", 1, 4);
-            SetEntPropFloat(g_iBBallIntel[arena_index], Prop_Send, "m_flModelScale", 1.15);
-
-            SDKHook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-            AcceptEntityInput(g_iBBallIntel[arena_index], "Enable");
+            ShowIntel(arena_index, pos);
 
             EmitSoundToClient(client, "vo/intel_teamdropped.mp3");
-
             RemoveClientParticle(client);
 
             g_bCanPlayerGetIntel[client] = false;
-            CreateTimer(0.5, Timer_AllowPlayerCap, client);
+            CreateTimer(0.5, Timer_AllowPlayerCap, GetClientUserId(client));
         }
     }
 
@@ -394,7 +379,6 @@ Action Command_DropItem(int client, const char[] command, int argc)
 
 // ===== TIMER CALLBACKS =====
 
-// Restore intel to spawn location after scoring or timeout events
 Action Timer_ResetIntel(Handle timer, int userid)
 {
     int client = GetClientOfUserId(userid);
@@ -405,10 +389,11 @@ Action Timer_ResetIntel(Handle timer, int userid)
     return Plugin_Continue;
 }
 
-// Re-enable intel pickup capability after a brief cooldown period
 Action Timer_AllowPlayerCap(Handle timer, int userid)
 {
-    g_bCanPlayerGetIntel[userid] = true;
+    int client = GetClientOfUserId(userid);
+    if (client > 0 && IsClientInGame(client))
+        g_bCanPlayerGetIntel[client] = true;
 
     return Plugin_Continue;
 }
