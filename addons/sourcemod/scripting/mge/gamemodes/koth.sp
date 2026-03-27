@@ -8,9 +8,9 @@ void SetupKothCapturePoints()
         if (g_bArenaKoth[i])
         {
             float point_loc[3];
-            point_loc[0] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][0];
-            point_loc[1] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][1];
-            point_loc[2] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][2];
+            point_loc[0] = g_fKothPointPos[i][0];
+            point_loc[1] = g_fKothPointPos[i][1];
+            point_loc[2] = g_fKothPointPos[i][2];
 
             if (IsValidEdict(g_iCapturePoint[i]) && g_iCapturePoint[i] > 0)
             {

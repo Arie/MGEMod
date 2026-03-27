@@ -9,15 +9,15 @@ void SetupBBallHoops()
     {
         if (g_bArenaBBall[i])
         {
-            float hoop_2_loc[3];
-            hoop_2_loc[0] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][0];
-            hoop_2_loc[1] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][1];
-            hoop_2_loc[2] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][2];
-
             float hoop_1_loc[3];
-            hoop_1_loc[0] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i] - 1][0];
-            hoop_1_loc[1] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i] - 1][1];
-            hoop_1_loc[2] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i] - 1][2];
+            hoop_1_loc[0] = g_fBBallHoopPos[i][1][0];
+            hoop_1_loc[1] = g_fBBallHoopPos[i][1][1];
+            hoop_1_loc[2] = g_fBBallHoopPos[i][1][2];
+
+            float hoop_2_loc[3];
+            hoop_2_loc[0] = g_fBBallHoopPos[i][2][0];
+            hoop_2_loc[1] = g_fBBallHoopPos[i][2][1];
+            hoop_2_loc[2] = g_fBBallHoopPos[i][2][2];
 
             if (IsValidEntity(g_iBBallHoop[i][SLOT_ONE]) && g_iBBallHoop[i][SLOT_ONE] > 0)
                 RemoveEntity(g_iBBallHoop[i][SLOT_ONE]);
@@ -123,18 +123,18 @@ void ResetIntel(int arena_index, any client = -1)
 
         if (client_slot == SLOT_ONE || client_slot == SLOT_THREE)
         {
-            intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][0];
-            intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][1];
-            intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][2];
+            intel_loc[0] = g_fBBallIntelPos[arena_index][1][0];
+            intel_loc[1] = g_fBBallIntelPos[arena_index][1][1];
+            intel_loc[2] = g_fBBallIntelPos[arena_index][1][2];
         } else if (client_slot == SLOT_TWO || client_slot == SLOT_FOUR) {
-            intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][0];
-            intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][1];
-            intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 2][2];
+            intel_loc[0] = g_fBBallIntelPos[arena_index][2][0];
+            intel_loc[1] = g_fBBallIntelPos[arena_index][2][1];
+            intel_loc[2] = g_fBBallIntelPos[arena_index][2][2];
         }
     } else {
-        intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][0];
-        intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][1];
-        intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 4][2];
+        intel_loc[0] = g_fBBallIntelPos[arena_index][0][0];
+        intel_loc[1] = g_fBBallIntelPos[arena_index][0][1];
+        intel_loc[2] = g_fBBallIntelPos[arena_index][0][2];
     }
 
     ShowIntel(arena_index, intel_loc);
@@ -334,7 +334,7 @@ void HandleBBallPlayerDeath(int victim, int killer, int arena_index)
     if (dist > -1)
         pos[2] = pos[2] - dist + 5;
     else
-        pos[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][2];
+        pos[2] = g_fBBallIntelPos[arena_index][1][2];
 
     ShowIntel(arena_index, pos);
 
@@ -361,7 +361,7 @@ Action Command_DropItem(int client, const char[] command, int argc)
             if (dist > -1)
                 pos[2] = pos[2] - dist + 5;
             else
-                pos[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index] - 3][2];
+                pos[2] = g_fBBallIntelPos[arena_index][1][2];
 
             ShowIntel(arena_index, pos);
 

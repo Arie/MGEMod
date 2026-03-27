@@ -88,16 +88,14 @@ bool g_tfctClassAllowed[10];
 Handle g_tKothTimer         [MAXARENAS + 1];
 char
     g_sArenaName            [MAXARENAS + 1][64],
-    // From chillymge
-    g_sArenaOriginalName    [MAXARENAS + 1][64],
-    // Cap point trggier name for KOTH
-    g_sArenaCapTrigger      [MAXARENAS + 1][64],
-    // Cap point name for KOTH
-    g_sArenaCap             [MAXARENAS + 1][64];
+    g_sArenaOriginalName    [MAXARENAS + 1][64];
 
 float
     g_fArenaSpawnOrigin     [MAXARENAS + 1][MAXSPAWNS+1][3],
     g_fArenaSpawnAngles     [MAXARENAS + 1][MAXSPAWNS+1][3],
+    g_fBBallHoopPos         [MAXARENAS + 1][3][3],
+    g_fBBallIntelPos        [MAXARENAS + 1][3][3],
+    g_fKothPointPos         [MAXARENAS + 1][3],
     g_fArenaHPRatio         [MAXARENAS + 1],
     g_fArenaMinSpawnDist    [MAXARENAS + 1],
     g_fArenaRespawnTime     [MAXARENAS + 1],
@@ -124,8 +122,6 @@ bool
     g_bArenaTurris          [MAXARENAS + 1],
     g_bOvertimePlayed       [MAXARENAS + 1][4],
     g_bTimerRunning         [MAXARENAS + 1],
-    g_bArenaHasCap          [MAXARENAS + 1],
-    g_bArenaHasCapTrigger   [MAXARENAS + 1],
     g_bArenaBoostVectors    [MAXARENAS + 1],
     g_bArenaClassChange     [MAXARENAS + 1];
 
@@ -152,6 +148,7 @@ int
     g_iArenaMaxRating       [MAXARENAS + 1],
     g_iArenaCdTime          [MAXARENAS + 1],
     g_iArenaSpawns          [MAXARENAS + 1],
+    g_iArenaRedSpawnCount   [MAXARENAS + 1],
     //                      [What arena the hoop is in][Hoop 1 or Hoop 2]
     g_iBBallHoop            [MAXARENAS + 1][3],
     g_iBBallIntel           [MAXARENAS + 1],
@@ -166,6 +163,7 @@ int
     g_iRankTargetClient     [MAXPLAYERS + 1];
 
 bool g_tfctArenaAllowedClasses[MAXARENAS + 1][10];
+TFClassType g_tfctArenaSpawnClass[MAXARENAS + 1][MAXSPAWNS + 1];
 
 // Player vars
 char g_sPlayerSteamID       [MAXPLAYERS + 1][32]; // Saving steamid

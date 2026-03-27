@@ -1342,19 +1342,58 @@ Action Timer_Tele(Handle timer, int userid)
     }
 
 
-    // BBall and 2v2 arenas handle spawns differently, each team, has their own spawns.
-    if (g_bArenaBBall[arena_index])
+    // Team-based modes: BBall, KOTH, or 2v2 arenas use the red/blu boundary
+    if (g_bArenaBBall[arena_index] || g_bArenaKoth[arena_index] || g_bFourPersonArena[arena_index])
     {
-        int random_int;
-        int offset_high, offset_low;
-        if (g_iPlayerSlot[client] == SLOT_ONE || g_iPlayerSlot[client] == SLOT_THREE)
+        bool isRed = (player_slot == SLOT_ONE || player_slot == SLOT_THREE);
+        int offset_low = isRed ? 1 : (g_iArenaRedSpawnCount[arena_index] + 1);
+        int offset_high = isRed ? g_iArenaRedSpawnCount[arena_index] : g_iArenaSpawns[arena_index];
+
+        // Class-specific spawn filtering: narrow the pool if this class has tagged spawns
+        TFClassType playerClass = g_tfctPlayerClass[client];
+        int classPool[MAXSPAWNS + 1];
+        int classPoolSize = 0;
+
+        for (int s = offset_low; s <= offset_high; s++)
         {
-            offset_high = ((g_iArenaSpawns[arena_index] - 5) / 2);
-            random_int = GetRandomInt(1, offset_high); // The first half of the player spawns are for slot one and three.
-        } else {
-            offset_high = (g_iArenaSpawns[arena_index] - 5);
-            offset_low = (((g_iArenaSpawns[arena_index] - 5) / 2) + 1);
-            random_int = GetRandomInt(offset_low, offset_high); // The last 5 spawns are for the intel and trigger spawns, not players.
+            if (g_tfctArenaSpawnClass[arena_index][s] == playerClass)
+            {
+                classPoolSize++;
+                classPool[classPoolSize] = s;
+            }
+        }
+
+        if (classPoolSize > 0)
+        {
+            offset_low = 0;
+            offset_high = 0;
+        }
+
+        int random_int;
+        if (classPoolSize > 0)
+        {
+            random_int = classPool[GetRandomInt(1, classPoolSize)];
+        }
+        else
+        {
+            // Get teammate and check if they're using a spawn point (for 2v2 modes)
+            if (g_bFourPersonArena[arena_index])
+            {
+                int teammate = GetPlayerTeammate(player_slot, arena_index);
+                int teammate_spawn = -1;
+                if (IsValidClient(teammate) && IsPlayerAlive(teammate))
+                    teammate_spawn = GetPlayerCurrentSpawnPoint(teammate, arena_index);
+
+                int attempts = 0;
+                do {
+                    random_int = GetRandomInt(offset_low, offset_high);
+                    attempts++;
+                } while (random_int == teammate_spawn && attempts < 50);
+            }
+            else
+            {
+                random_int = GetRandomInt(offset_low, offset_high);
+            }
         }
 
         TeleportEntity(client, g_fArenaSpawnOrigin[arena_index][random_int], g_fArenaSpawnAngles[arena_index][random_int], vel);
@@ -1362,108 +1401,53 @@ Action Timer_Tele(Handle timer, int userid)
         UpdateHud(client);
         return Plugin_Continue;
     }
-    else if (g_bArenaKoth[arena_index])
-    {
-        int random_int;
-        int offset_high, offset_low;
-        if (g_iPlayerSlot[client] == SLOT_ONE || g_iPlayerSlot[client] == SLOT_THREE)
-        {
-            offset_high = ((g_iArenaSpawns[arena_index] - 1) / 2);
-            random_int = GetRandomInt(1, offset_high); // The first half of the player spawns are for slot one and three.
-        } else {
-            offset_high = (g_iArenaSpawns[arena_index] - 1);
-            offset_low = (((g_iArenaSpawns[arena_index] + 1) / 2));
-            random_int = GetRandomInt(offset_low, offset_high); // The last spawn is for the point
-        }
 
-        TeleportEntity(client, g_fArenaSpawnOrigin[arena_index][random_int], g_fArenaSpawnAngles[arena_index][random_int], vel);
-        EmitAmbientSound("items/spawn_item.wav", g_fArenaSpawnOrigin[arena_index][random_int], _, SNDLEVEL_NORMAL, _, 1.0);
-        UpdateHud(client);
-        return Plugin_Continue;
-    }
-    else if (g_bFourPersonArena[arena_index])
-    {
-        int random_int;
-        int offset_high, offset_low;
-        if (g_iPlayerSlot[client] == SLOT_ONE || g_iPlayerSlot[client] == SLOT_THREE)
-        {
-            offset_high = ((g_iArenaSpawns[arena_index]) / 2);
-            offset_low = 1;
-        } else {
-            offset_high = (g_iArenaSpawns[arena_index]);
-            offset_low = (((g_iArenaSpawns[arena_index]) / 2) + 1);
-        }
+    // Default 1v1: merge all spawns into one pool, distance-based random selection
+    int totalSpawns = g_iArenaSpawns[arena_index];
+    int[] RandomSpawn = new int[totalSpawns + 1];
 
-        // Get teammate and check if they're using a spawn point
-        int teammate = GetPlayerTeammate(g_iPlayerSlot[client], arena_index);
-        int teammate_spawn = -1;
-        if (IsValidClient(teammate) && IsPlayerAlive(teammate)) {
-            teammate_spawn = GetPlayerCurrentSpawnPoint(teammate, arena_index);
-        }
+    for (int i = 0; i < totalSpawns; i++)
+        RandomSpawn[i] = i + 1;
 
-        // Pick random spawn from team's pool, avoiding teammate's spawn
-        int attempts = 0;
-        do {
-            random_int = GetRandomInt(offset_low, offset_high);
-            attempts++;
-        } while (random_int == teammate_spawn && attempts < 50); // Prevent infinite loop
+    SortIntegers(RandomSpawn, totalSpawns, Sort_Random);
 
-        TeleportEntity(client, g_fArenaSpawnOrigin[arena_index][random_int], g_fArenaSpawnAngles[arena_index][random_int], vel);
-        EmitAmbientSound("items/spawn_item.wav", g_fArenaSpawnOrigin[arena_index][random_int], _, SNDLEVEL_NORMAL, _, 1.0);
-        UpdateHud(client);
-        return Plugin_Continue;
-    }
-
-    // Create an array that can hold all the arena's spawns.
-    int[] RandomSpawn = new int[g_iArenaSpawns[arena_index] + 1];
-
-    // Fill the array with the spawns.
-    for (int i = 0; i < g_iArenaSpawns[arena_index]; i++)
-    RandomSpawn[i] = i + 1;
-
-    // Shuffle them into a random order.
-    SortIntegers(RandomSpawn, g_iArenaSpawns[arena_index], Sort_Random);
-
-    // Now when the array is gone through sequentially, it will still provide a random spawn.
     float besteffort_dist;
     int besteffort_spawn;
-    for (int i = 0; i < g_iArenaSpawns[arena_index]; i++)
+    for (int i = 0; i < totalSpawns; i++)
     {
         int client_slot = g_iPlayerSlot[client];
         int foe_slot = (client_slot == SLOT_ONE || client_slot == SLOT_THREE) ? SLOT_TWO : SLOT_ONE;
-        if (foe_slot)
+        int foe = g_iArenaQueue[arena_index][foe_slot];
+        if (IsValidClient(foe))
         {
-            float distance;
-            int foe = g_iArenaQueue[arena_index][foe_slot];
-            if (IsValidClient(foe))
+            float foe_pos[3];
+            GetClientAbsOrigin(foe, foe_pos);
+            float distance = GetVectorDistance(foe_pos, g_fArenaSpawnOrigin[arena_index][RandomSpawn[i]]);
+            if (distance > g_fArenaMinSpawnDist[arena_index])
             {
-                float foe_pos[3];
-                GetClientAbsOrigin(foe, foe_pos);
-                distance = GetVectorDistance(foe_pos, g_fArenaSpawnOrigin[arena_index][RandomSpawn[i]]);
-                if (distance > g_fArenaMinSpawnDist[arena_index])
-                {
-                    TeleportEntity(client, g_fArenaSpawnOrigin[arena_index][RandomSpawn[i]], g_fArenaSpawnAngles[arena_index][RandomSpawn[i]], vel);
-                    EmitAmbientSound("items/spawn_item.wav", g_fArenaSpawnOrigin[arena_index][RandomSpawn[i]], _, SNDLEVEL_NORMAL, _, 1.0);
-                    UpdateHud(client);
-                    return Plugin_Continue;
-                } else if (distance > besteffort_dist) {
-                    besteffort_dist = distance;
-                    besteffort_spawn = RandomSpawn[i];
-                }
+                TeleportEntity(client, g_fArenaSpawnOrigin[arena_index][RandomSpawn[i]], g_fArenaSpawnAngles[arena_index][RandomSpawn[i]], vel);
+                EmitAmbientSound("items/spawn_item.wav", g_fArenaSpawnOrigin[arena_index][RandomSpawn[i]], _, SNDLEVEL_NORMAL, _, 1.0);
+                UpdateHud(client);
+                return Plugin_Continue;
+            }
+            else if (distance > besteffort_dist)
+            {
+                besteffort_dist = distance;
+                besteffort_spawn = RandomSpawn[i];
             }
         }
     }
 
     if (besteffort_spawn)
     {
-        // Couldn't find a spawn that was far enough away, so use the one that was the farthest.
         TeleportEntity(client, g_fArenaSpawnOrigin[arena_index][besteffort_spawn], g_fArenaSpawnAngles[arena_index][besteffort_spawn], vel);
         EmitAmbientSound("items/spawn_item.wav", g_fArenaSpawnOrigin[arena_index][besteffort_spawn], _, SNDLEVEL_NORMAL, _, 1.0);
         UpdateHud(client);
         return Plugin_Continue;
-    } else {
-        // No foe, so just pick a random spawn.
-        int random_int = GetRandomInt(1, g_iArenaSpawns[arena_index]);
+    }
+    else
+    {
+        int random_int = GetRandomInt(1, totalSpawns);
         TeleportEntity(client, g_fArenaSpawnOrigin[arena_index][random_int], g_fArenaSpawnAngles[arena_index][random_int], vel);
         EmitAmbientSound("items/spawn_item.wav", g_fArenaSpawnOrigin[arena_index][random_int], _, SNDLEVEL_NORMAL, _, 1.0);
         UpdateHud(client);

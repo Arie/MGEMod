@@ -1,12 +1,289 @@
+// ===== CONFIG PARSING HELPERS =====
+
+bool ParseSpawnCoord(const char[] raw, int arena, int spawnIdx)
+{
+    char co[6][16];
+    int count = ExplodeString(raw, " ", co, 6, 16);
+    if (count == 6)
+    {
+        for (int i = 0; i < 3; i++)
+            g_fArenaSpawnOrigin[arena][spawnIdx][i] = StringToFloat(co[i]);
+        for (int i = 3; i < 6; i++)
+            g_fArenaSpawnAngles[arena][spawnIdx][i - 3] = StringToFloat(co[i]);
+        return true;
+    }
+    else if (count == 4)
+    {
+        for (int i = 0; i < 3; i++)
+            g_fArenaSpawnOrigin[arena][spawnIdx][i] = StringToFloat(co[i]);
+        g_fArenaSpawnAngles[arena][spawnIdx][0] = 0.0;
+        g_fArenaSpawnAngles[arena][spawnIdx][1] = StringToFloat(co[3]);
+        g_fArenaSpawnAngles[arena][spawnIdx][2] = 0.0;
+        return true;
+    }
+    return false;
+}
+
+bool ParseCoordInto(const char[] raw, float pos[3])
+{
+    char co[6][16];
+    int count = ExplodeString(raw, " ", co, 6, 16);
+    if (count >= 3)
+    {
+        for (int i = 0; i < 3; i++)
+            pos[i] = StringToFloat(co[i]);
+        return true;
+    }
+    return false;
+}
+
+int LoadNumberedSpawns(KeyValues kv, int arena, int offset, TFClassType classTag)
+{
+    int loaded = 0;
+    int id;
+    char numStr[4], nextStr[4], raw[64];
+
+    if (!kv.GetNameSymbol("1", id))
+        return 0;
+
+    do
+    {
+        loaded++;
+        int idx = offset + loaded;
+        if (idx > MAXSPAWNS)
+        {
+            LogError("Arena '%s': Exceeded max spawns (%d)", g_sArenaOriginalName[arena], MAXSPAWNS);
+            break;
+        }
+
+        IntToString(loaded, numStr, sizeof(numStr));
+        IntToString(loaded + 1, nextStr, sizeof(nextStr));
+        kv.GetString(numStr, raw, sizeof(raw));
+
+        if (!ParseSpawnCoord(raw, arena, idx))
+        {
+            LogError("Arena '%s': Bad coordinates on spawn %d", g_sArenaOriginalName[arena], loaded);
+            loaded--;
+            break;
+        }
+
+        g_tfctArenaSpawnClass[arena][idx] = classTag;
+    } while (kv.GetNameSymbol(nextStr, id));
+
+    return loaded;
+}
+
+void SetArenaGamemode(int arena, const char[] gamemode)
+{
+    g_bArenaMGE[arena] = false;
+    g_bArenaBBall[arena] = false;
+    g_bArenaKoth[arena] = false;
+    g_bArenaAmmomod[arena] = false;
+    g_bArenaMidair[arena] = false;
+    g_bArenaEndif[arena] = false;
+    g_bArenaUltiduo[arena] = false;
+    g_bArenaTurris[arena] = false;
+
+    if (StrEqual(gamemode, "bball"))
+        g_bArenaBBall[arena] = true;
+    else if (StrEqual(gamemode, "koth"))
+        g_bArenaKoth[arena] = true;
+    else if (StrEqual(gamemode, "ammomod"))
+        g_bArenaAmmomod[arena] = true;
+    else if (StrEqual(gamemode, "midair"))
+        g_bArenaMidair[arena] = true;
+    else if (StrEqual(gamemode, "endif"))
+        g_bArenaEndif[arena] = true;
+    else if (StrEqual(gamemode, "ultiduo"))
+    {
+        g_bArenaUltiduo[arena] = true;
+        g_bArenaKoth[arena] = true;
+    }
+    else if (StrEqual(gamemode, "turris"))
+        g_bArenaTurris[arena] = true;
+    else
+        g_bArenaMGE[arena] = true;
+}
+
+void SetArenaTeamSize(int arena, const char[] teamSize)
+{
+    char tokens[2][8];
+    int count = ExplodeString(teamSize, " ", tokens, 2, 8);
+
+    g_bFourPersonArena[arena] = StrEqual(tokens[0], "2v2");
+    g_bArenaAllowChange[arena] = (count == 2);
+}
+
+bool LoadSpawnSection(KeyValues kv, int arena)
+{
+    if (!kv.JumpToKey("spawns"))
+        return false;
+
+    if (kv.JumpToKey("red"))
+    {
+        // Check for class-specific subsections: if GotoFirstSubKey succeeds,
+        // the children are sections (class names), not key-value pairs.
+        if (kv.GotoFirstSubKey())
+        {
+            // Class-specific format: red { soldier { ... } medic { ... } }
+            int redCount = 0;
+            do
+            {
+                char className[16];
+                kv.GetSectionName(className, sizeof(className));
+                TFClassType classType = TF2_GetClass(className);
+
+                int loaded = LoadNumberedSpawns(kv, arena, redCount, classType);
+                redCount += loaded;
+            } while (kv.GotoNextKey());
+            kv.GoBack(); // back to red
+            kv.GoBack(); // back to spawns
+
+            g_iArenaRedSpawnCount[arena] = redCount;
+
+            if (!kv.JumpToKey("blu"))
+            {
+                kv.GoBack();
+                return false;
+            }
+
+            int bluCount = 0;
+            if (kv.GotoFirstSubKey())
+            {
+                do
+                {
+                    char className[16];
+                    kv.GetSectionName(className, sizeof(className));
+                    TFClassType classType = TF2_GetClass(className);
+
+                    int loaded = LoadNumberedSpawns(kv, arena, redCount + bluCount, classType);
+                    bluCount += loaded;
+                } while (kv.GotoNextKey());
+                kv.GoBack(); // back to blu
+            }
+            kv.GoBack(); // back to spawns
+
+            g_iArenaSpawns[arena] = redCount + bluCount;
+        }
+        else
+        {
+            // Team-split format: red { "1" "..." } blu { "1" "..." }
+            int redCount = LoadNumberedSpawns(kv, arena, 0, TFClass_Unknown);
+            kv.GoBack(); // back to spawns
+
+            g_iArenaRedSpawnCount[arena] = redCount;
+
+            int bluCount = 0;
+            if (kv.JumpToKey("blu"))
+            {
+                bluCount = LoadNumberedSpawns(kv, arena, redCount, TFClass_Unknown);
+                kv.GoBack(); // back to spawns
+            }
+
+            g_iArenaSpawns[arena] = redCount + bluCount;
+        }
+    }
+    else
+    {
+        // Flat format: spawns { "1" "..." "2" "..." }
+        int total = LoadNumberedSpawns(kv, arena, 0, TFClass_Unknown);
+        int mid = total / 2;
+
+        g_iArenaRedSpawnCount[arena] = mid;
+        g_iArenaSpawns[arena] = total;
+    }
+
+    kv.GoBack(); // back to arena section
+    return (g_iArenaSpawns[arena] > 0);
+}
+
+void LoadEntitySection(KeyValues kv, int arena)
+{
+    if (!kv.JumpToKey("entities"))
+        return;
+
+    char raw[64];
+
+    kv.GetString("hoop_red", raw, sizeof(raw), "");
+    if (raw[0]) ParseCoordInto(raw, g_fBBallHoopPos[arena][1]);
+
+    kv.GetString("hoop_blu", raw, sizeof(raw), "");
+    if (raw[0]) ParseCoordInto(raw, g_fBBallHoopPos[arena][2]);
+
+    kv.GetString("intel_start", raw, sizeof(raw), "");
+    if (raw[0]) ParseCoordInto(raw, g_fBBallIntelPos[arena][0]);
+
+    kv.GetString("intel_red", raw, sizeof(raw), "");
+    if (raw[0]) ParseCoordInto(raw, g_fBBallIntelPos[arena][1]);
+
+    kv.GetString("intel_blu", raw, sizeof(raw), "");
+    if (raw[0]) ParseCoordInto(raw, g_fBBallIntelPos[arena][2]);
+
+    kv.GetString("capture_point", raw, sizeof(raw), "");
+    if (raw[0]) ParseCoordInto(raw, g_fKothPointPos[arena]);
+
+    kv.GoBack();
+}
+
+bool ValidateArenaSchema(int arena)
+{
+    char name[64];
+    strcopy(name, sizeof(name), g_sArenaOriginalName[arena]);
+
+    if (g_bArenaBBall[arena])
+    {
+        if (g_fBBallHoopPos[arena][1][0] == 0.0 && g_fBBallHoopPos[arena][1][1] == 0.0 && g_fBBallHoopPos[arena][1][2] == 0.0)
+        {
+            LogError("Arena '%s': BBall requires 'hoop_red' in entities section, skipping", name);
+            return false;
+        }
+        if (g_fBBallHoopPos[arena][2][0] == 0.0 && g_fBBallHoopPos[arena][2][1] == 0.0 && g_fBBallHoopPos[arena][2][2] == 0.0)
+        {
+            LogError("Arena '%s': BBall requires 'hoop_blu' in entities section, skipping", name);
+            return false;
+        }
+        if (g_fBBallIntelPos[arena][0][0] == 0.0 && g_fBBallIntelPos[arena][0][1] == 0.0 && g_fBBallIntelPos[arena][0][2] == 0.0)
+        {
+            LogError("Arena '%s': BBall requires 'intel_start' in entities section, skipping", name);
+            return false;
+        }
+    }
+
+    if (g_bArenaKoth[arena])
+    {
+        if (g_fKothPointPos[arena][0] == 0.0 && g_fKothPointPos[arena][1] == 0.0 && g_fKothPointPos[arena][2] == 0.0)
+        {
+            LogError("Arena '%s': KOTH/Ultiduo requires 'capture_point' in entities section, skipping", name);
+            return false;
+        }
+    }
+
+    if (g_bArenaUltiduo[arena])
+    {
+        bool hasSoldier = false, hasMedic = false;
+        for (int i = 1; i <= g_iArenaSpawns[arena]; i++)
+        {
+            if (g_tfctArenaSpawnClass[arena][i] == TFClass_Soldier) hasSoldier = true;
+            if (g_tfctArenaSpawnClass[arena][i] == TFClass_Medic) hasMedic = true;
+        }
+        if (!hasSoldier || !hasMedic)
+        {
+            LogError("Arena '%s': Ultiduo requires class-specific spawns (soldier + medic) under red/blu, skipping", name);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 // ===== PLUGIN CORE LIFECYCLE =====
 
-// Load and parse spawn point configurations from map-specific config files
 bool LoadSpawnPoints()
 {
     char txtfile[256];
     GetCurrentMap(g_sMapName, sizeof(g_sMapName));
 
-    //  "workshop/mge_training_v8_beta4b.ugc1996603816"
     if (StrContains(g_sMapName, "workshop/", false) != -1)
     {
         char nonWorkshopName[256];
@@ -20,21 +297,17 @@ bool LoadSpawnPoints()
         }
     }
 
-    // Build path to map-specific config file: configs/mge/{mapname}.cfg
     Format(txtfile, sizeof(txtfile), "configs/mge/%s.cfg", g_sMapName);
     BuildPath(Path_SM, txtfile, sizeof(txtfile), txtfile);
 
     KeyValues kv = new KeyValues("SpawnConfigs");
 
-    char spawn[64];
-    char spawnCo[6][16];
-    int count;
-    int i;
     g_iArenaCount = 0;
 
     for (int j = 0; j <= MAXARENAS; j++)
     {
         g_iArenaSpawns[j] = 0;
+        g_iArenaRedSpawnCount[j] = 0;
     }
 
     if (!kv.ImportFromFile(txtfile))
@@ -43,112 +316,83 @@ bool LoadSpawnPoints()
         delete kv;
         return false;
     }
-    
+
     if (!kv.GotoFirstSubKey())
     {
         LogError("Error in cfg file: %s", txtfile);
         delete kv;
         return false;
     }
-    
+
     do
     {
         g_iArenaCount++;
         kv.GetSectionName(g_sArenaOriginalName[g_iArenaCount], 64);
-        int id;
-        if (kv.GetNameSymbol("1", id))
+
+        // Gamemode
+        char gamemode[32];
+        kv.GetString("gamemode", gamemode, sizeof(gamemode), "mge");
+        SetArenaGamemode(g_iArenaCount, gamemode);
+
+        // Team size
+        char teamSize[32];
+        kv.GetString("team_size", teamSize, sizeof(teamSize), "1v1");
+        SetArenaTeamSize(g_iArenaCount, teamSize);
+
+        // Spawns
+        if (!LoadSpawnSection(kv, g_iArenaCount))
         {
-            char intstr[4];
-            char intstr2[4];
-            do
-            {
-                g_iArenaSpawns[g_iArenaCount]++;
-                IntToString(g_iArenaSpawns[g_iArenaCount], intstr, sizeof(intstr));
-                IntToString(g_iArenaSpawns[g_iArenaCount]+1, intstr2, sizeof(intstr2));
-                kv.GetString(intstr, spawn, sizeof(spawn));
-                count = ExplodeString(spawn, " ", spawnCo, 6, 16);
-                if (count==6)
-                {
-                    for (i=0; i<3; i++)
-                    {
-                        g_fArenaSpawnOrigin[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][i] = StringToFloat(spawnCo[i]);
-                    }
-                    for (i=3; i<6; i++)
-                    {
-                        g_fArenaSpawnAngles[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][i-3] = StringToFloat(spawnCo[i]);
-                    }
-                } else if(count==4) {
-                    for (i=0; i<3; i++)
-                    {
-                        g_fArenaSpawnOrigin[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][i] = StringToFloat(spawnCo[i]);
-                    }
-                    g_fArenaSpawnAngles[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][0] = 0.0;
-                    g_fArenaSpawnAngles[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][1] = StringToFloat(spawnCo[3]);
-                    g_fArenaSpawnAngles[g_iArenaCount][g_iArenaSpawns[g_iArenaCount]][2] = 0.0;
-                } else {
-                    SetFailState("Error in cfg file. Wrong number of parameters (%d) on spawn <%i> in arena <%s>",count,g_iArenaSpawns[g_iArenaCount],g_sArenaOriginalName[g_iArenaCount]);
-                }
-            } while (kv.GetNameSymbol(intstr2, id));
-        } else {
-            LogError("Could not load spawns on arena %s.", g_sArenaOriginalName[g_iArenaCount]);
+            LogError("Arena '%s': No valid spawns found, skipping", g_sArenaOriginalName[g_iArenaCount]);
+            g_iArenaCount--;
+            continue;
         }
 
-        if (kv.GetNameSymbol("cap", id)) {
-            kv.GetString("cap",  g_sArenaCap[g_iArenaCount], 64);
-            g_bArenaHasCap[g_iArenaCount] = true;
-        } else {
-            g_bArenaHasCap[g_iArenaCount] = false;
-        }
+        // Entities
+        LoadEntitySection(kv, g_iArenaCount);
 
-        if (kv.GetNameSymbol("cap_trigger", id)) {
-            kv.GetString("cap_trigger",  g_sArenaCapTrigger[g_iArenaCount], 64);
-            g_bArenaHasCapTrigger[g_iArenaCount] = true;
-        }
+        // Settings
+        g_iArenaMgelimit[g_iArenaCount] = kv.GetNum("frag_limit", g_iDefaultFragLimit);
+        g_iArenaCaplimit[g_iArenaCount] = kv.GetNum("cap_limit", g_iDefaultFragLimit);
+        g_iArenaMinRating[g_iArenaCount] = kv.GetNum("min_elo", -1);
+        g_iArenaMaxRating[g_iArenaCount] = kv.GetNum("max_elo", -1);
+        g_iArenaCdTime[g_iArenaCount] = kv.GetNum("countdown_seconds", DEFAULT_COUNTDOWN_TIME);
+        g_fArenaHPRatio[g_iArenaCount] = kv.GetFloat("hp_multiplier", 1.5);
+        g_iArenaAirshotHeight[g_iArenaCount] = kv.GetNum("airshot_min_height", 250);
+        g_bArenaBoostVectors[g_iArenaCount] = kv.GetNum("knockback_boost", 0) ? true : false;
+        g_bVisibleHoops[g_iArenaCount] = kv.GetNum("visible_hoops", 0) ? true : false;
+        g_iArenaEarlyLeave[g_iArenaCount] = kv.GetNum("early_leave_threshold", 0);
+        g_bArenaInfAmmo[g_iArenaCount] = kv.GetNum("infinite_ammo", 1) ? true : false;
+        g_bArenaShowHPToPlayers[g_iArenaCount] = kv.GetNum("show_hp", 1) ? true : false;
+        g_fArenaMinSpawnDist[g_iArenaCount] = kv.GetFloat("min_spawn_distance", 100.0);
+        g_bArenaAllowKoth[g_iArenaCount] = kv.GetNum("allow_koth_switch", 0) ? true : false;
+        g_bArenaKothTeamSpawn[g_iArenaCount] = kv.GetNum("koth_team_spawns", 0) ? true : false;
+        g_fArenaRespawnTime[g_iArenaCount] = kv.GetFloat("respawn_delay", 0.1);
+        g_bArenaClassChange[g_iArenaCount] = kv.GetNum("allow_class_change", 1) ? true : false;
+        g_iDefaultCapTime[g_iArenaCount] = kv.GetNum("koth_round_time", 180);
 
-        // Optional parameters
-        g_iArenaMgelimit[g_iArenaCount] = kv.GetNum("fraglimit", g_iDefaultFragLimit);
-        g_iArenaCaplimit[g_iArenaCount] = kv.GetNum("caplimit", g_iDefaultFragLimit);
-        g_iArenaMinRating[g_iArenaCount] = kv.GetNum("minrating", -1);
-        g_iArenaMaxRating[g_iArenaCount] = kv.GetNum("maxrating", -1);
-        g_bArenaMidair[g_iArenaCount] = kv.GetNum("midair", 0) ? true : false;
-        g_iArenaCdTime[g_iArenaCount] = kv.GetNum("cdtime", DEFAULT_COUNTDOWN_TIME);
-        g_bArenaMGE[g_iArenaCount] = kv.GetNum("mge", 0) ? true : false;
-        g_fArenaHPRatio[g_iArenaCount] = kv.GetFloat("hpratio", 1.5);
-        g_bArenaEndif[g_iArenaCount] = kv.GetNum("endif", 0) ? true : false;
-        g_iArenaAirshotHeight[g_iArenaCount] = kv.GetNum("airshotheight", 250);
-        g_bArenaBoostVectors[g_iArenaCount] = kv.GetNum("boostvectors", 0) ? true : false;
-        g_bArenaBBall[g_iArenaCount] = kv.GetNum("bball", 0) ? true : false;
-        g_bVisibleHoops[g_iArenaCount] = kv.GetNum("vishoop", 0) ? true : false;
-        g_iArenaEarlyLeave[g_iArenaCount] = kv.GetNum("earlyleave", 0);
-        g_bArenaInfAmmo[g_iArenaCount] = kv.GetNum("infammo", 1) ? true : false;
-        g_bArenaShowHPToPlayers[g_iArenaCount] = kv.GetNum("showhp", 1) ? true : false;
-        g_fArenaMinSpawnDist[g_iArenaCount] = kv.GetFloat("mindist", 100.0);
-        g_bFourPersonArena[g_iArenaCount] = kv.GetNum("4player", 0) ? true : false;
-        g_bArenaAllowChange[g_iArenaCount] = kv.GetNum("allowchange", 0) ? true : false;
-        g_bArenaAllowKoth[g_iArenaCount] = kv.GetNum("allowkoth", 0) ? true : false;
-        g_bArenaKothTeamSpawn[g_iArenaCount] = kv.GetNum("kothteamspawn", 0) ? true : false;
-        g_fArenaRespawnTime[g_iArenaCount] = kv.GetFloat("respawntime", 0.1);
-        g_bArenaAmmomod[g_iArenaCount] = kv.GetNum("ammomod", 0) ? true : false;
-        g_bArenaUltiduo[g_iArenaCount] = kv.GetNum("ultiduo", 0) ? true : false;
-        g_bArenaKoth[g_iArenaCount] = kv.GetNum("koth", 0) ? true : false;
-        g_bArenaTurris[g_iArenaCount] = kv.GetNum("turris", 0) ? true : false;
-        g_bArenaClassChange[g_iArenaCount] = kv.GetNum("classchange", 1) ? true : false;
-        g_iDefaultCapTime[g_iArenaCount] = kv.GetNum("timer", 180);
-
-        // Parsing allowed classes for current arena
         char sAllowedClasses[128];
-        kv.GetString("classes", sAllowedClasses, sizeof(sAllowedClasses));
-        ParseAllowedClasses(sAllowedClasses,g_tfctArenaAllowedClasses[g_iArenaCount]);
+        kv.GetString("allowed_classes", sAllowedClasses, sizeof(sAllowedClasses));
+        ParseAllowedClasses(sAllowedClasses, g_tfctArenaAllowedClasses[g_iArenaCount]);
+
+        // Schema validation
+        if (!ValidateArenaSchema(g_iArenaCount))
+        {
+            g_iArenaCount--;
+            continue;
+        }
+
         g_iArenaFraglimit[g_iArenaCount] = g_iArenaMgelimit[g_iArenaCount];
         UpdateArenaName(g_iArenaCount);
     } while (kv.GotoNextKey());
-    
+
     if (g_iArenaCount)
     {
         LogMessage("Loaded %d arenas from %s. MGEMod enabled.", g_iArenaCount, txtfile);
         delete kv;
         return true;
-    } else {
+    }
+    else
+    {
         LogMessage("No arenas found in %s.", txtfile);
         delete kv;
         return false;
