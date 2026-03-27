@@ -817,6 +817,15 @@ Action Command_JoinClass(int client, int args)
         
     if (!args)
         return Plugin_Handled;
+
+    // Deduplicate "class not allowed" message
+    static float lastAttempt[MAXPLAYERS + 1];
+    float now = GetGameTime();
+    if (now == lastAttempt[client])
+    {
+        return Plugin_Handled;
+    }
+    lastAttempt[client] = now;
     
     // Parse class change request
     char s_class[64];
