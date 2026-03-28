@@ -1,4 +1,4 @@
-name: StAC Autobuild
+name: Autobuild
 # modified from https://github.com/nosoop/NinjaBuild-SMPlugin/blob/master/contrib/github-workflow/build-on-version-tag-push.yml
 
 on:
