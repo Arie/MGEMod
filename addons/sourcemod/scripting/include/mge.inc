@@ -191,7 +191,7 @@ native int MGE_GetPlayerArena(int client);
  * @param stats          Structure to store statistics in
  * @return               True on success, false otherwise
  */
-native bool MGE_GetPlayerStats(int client, MGEPlayerStats stats);
+native bool MGE_GetPlayerStats(int client, any[] stats);
 
 /**
  * Gets complete arena information
@@ -200,7 +200,7 @@ native bool MGE_GetPlayerStats(int client, MGEPlayerStats stats);
  * @param info           Structure to store arena information in
  * @return               True on success, false if arena is invalid
  */
-native bool MGE_GetArenaInfo(int arena_index, MGEArenaInfo info);
+native bool MGE_GetArenaInfo(int arena_index, any[] info);
 
 /**
  * Checks if a player is currently in an MGE arena
