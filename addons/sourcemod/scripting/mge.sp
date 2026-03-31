@@ -15,7 +15,7 @@
 #include <convar_class>
 #include <mge>
 
-#define PL_VERSION "3.1.0-beta14"
+#define PL_VERSION "3.1.0-beta15"
 
 #define MAXARENAS 63
 #define MAXSPAWNS 15
@@ -663,7 +663,7 @@ Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
         int player_arena = g_iPlayerArena[client];
         int player_slot = g_iPlayerSlot[client];
         
-        if (player_arena > 0 && player_slot > 0)
+        if (player_arena > 0 && player_slot > 0 && !g_iPlayerWaiting[client])
         {
             int max_active_slot = g_bFourPersonArena[player_arena] ? SLOT_FOUR : SLOT_TWO;
             if (player_slot <= max_active_slot)
