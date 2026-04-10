@@ -72,6 +72,445 @@ This is a fork of sappho's repository, with the following improvements:
 
 The plugin is ready to be a drop-in replacement for the standard MGE version. Database modifications will be performed automatically and safely.
 
+## Map Config File Format
+
+MGEMod loads arena definitions from per-map KeyValues config files. This section documents the full format for mapmakers who want to ship MGE arenas with their map.
+
+### File Location and Naming
+
+Config files live at:
+
+```
+addons/sourcemod/configs/mge/<mapname>.cfg
+```
+
+The filename must exactly match the map name as reported by the game engine (e.g. `mge_training_v8_beta4b.cfg` for `mge_training_v8_beta4b`). Workshop maps are automatically converted from their workshop ID to their display name.
+
+### File Structure
+
+The root key must be `SpawnConfigs`. Each child key is an arena, identified by its **display name** (shown in the `!add` menu and HUD). Arena names must be unique within the file.
+
+```
+SpawnConfigs
+{
+    "Arena Display Name"
+    {
+        // ... arena properties ...
+
+        "spawns"
+        {
+            // ... spawn points ...
+        }
+    }
+
+    "Another Arena"
+    {
+        // ...
+    }
+}
+```
+
+**Hard limits:** maximum **63 arenas** per file, maximum **15 spawns** per arena.
+
+---
+
+### Arena Properties
+
+#### Core Properties
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `gamemode` | string | `"mge"` | Game mode for this arena. See [Gamemodes](#gamemodes) for valid values. |
+| `team_size` | string | `"1v1"` | Team format. `"1v1"`, `"2v2"`, or two values separated by a space to allow switching (e.g. `"1v1 2v2"` or `"2v2 1v1"`). The first value sets the starting mode; the second enables `!1v1`/`!2v2` commands for in-game switching. |
+| `frag_limit` | int | server cvar | Frags (or caps for KOTH) required to win the match. |
+| `countdown_seconds` | int | server cvar | Seconds in the pre-match countdown before "FIGHT". Set to `0` to skip the countdown entirely. |
+| `allowed_classes` | string | server cvar | Space-separated list of TF2 class names permitted in this arena: `scout soldier demoman sniper medic heavy engineer spy pyro`. If omitted, falls back to the server's default allowed classes. |
+
+#### HP and Ammo
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `hp_multiplier` | float | `1.5` | Multiplier applied to each player's base max HP on spawn. `1.25` gives a Soldier 150 HP instead of 200; `1.0` gives stock HP. |
+| `infinite_ammo` | 0/1 | `1` | Give unlimited ammo. Disable for standard MGE arenas where ammo management matters. |
+| `show_hp` | 0/1 | `1` | Show players' current HP in the arena HUD. |
+
+#### Spawning
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `min_spawn_distance` | float | `100.0` | Minimum distance (in Hammer units) required between two randomly selected spawn points. Prevents players from spawning on top of each other. Increase this for larger arenas. |
+| `respawn_delay` | float | `0.1` | Seconds before a dead player respawns. Use higher values (e.g. `2.0` for BBall, `5.0`–`10.0` for KOTH/Ultiduo) to create respawn pressure. |
+
+#### ELO Gating
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `min_elo` | int | `-1` (disabled) | Minimum ELO rating a player must have to join this arena. `-1` disables the check. |
+| `max_elo` | int | `-1` (disabled) | Maximum ELO rating allowed in this arena. `-1` disables the check. |
+
+#### Match Rules
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `early_leave_threshold` | int | `0` | If a player leaves mid-match and their opponent has at least this many points, the opponent is awarded the win and ELO is calculated. `0` disables early-leave wins. |
+| `allow_class_change` | 0/1 | `1` | Whether players can change class during a duel. When set to `0`, class switching is locked after the first point is scored. |
+| `airshot_min_height` | int | `250` | Minimum height above ground (in Hammer units) for a kill to be counted as an airshot in stats. |
+| `knockback_boost` | 0/1 | `0` | Enable engine knockback boost vectors. Experimental. |
+
+#### KOTH-Specific
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `koth_round_time` | int | `180` | Duration in seconds of each KOTH round timer. |
+| `allow_koth_switch` | 0/1 | `0` | Allow players in this arena to switch it between KOTH and MGE modes using `!koth`/`!mge` commands. |
+| `koth_team_spawns` | 0/1 | `0` | Use team-split spawn sections instead of flat spawn list when this arena is in KOTH mode. |
+
+#### BBall-Specific
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `visible_hoops` | 0/1 | `0` | Make the basketball hoops visible as world props. |
+
+---
+
+### Spawn Coordinate Format
+
+Each spawn point is a quoted string of space-separated numbers. Two formats are accepted:
+
+**6-value format** — `"X Y Z pitch yaw roll"` (full rotation)
+```
+"1"    "1234.5 -678.9 -100.0 0.0 90.0 0.0"
+```
+
+**4-value format** — `"X Y Z yaw"` (pitch and roll default to 0)
+```
+"1"    "1234 -678 -100 90"
+```
+
+All coordinates are in **Hammer units**. Angles follow TF2 conventions: pitch is the vertical look angle (negative = looking up), yaw is the horizontal facing direction (0 = +X axis, 90 = +Y, −90/270 = −Y, 180/−180 = −X), and roll is almost always `0`.
+
+---
+
+### Spawn Section Formats
+
+#### Flat Format
+
+All spawns in a single numbered list. The plugin splits them evenly: the first half goes to RED, the second half to BLU. Players are assigned spawn points randomly from their team's pool. Use this for simple 1v1 arenas.
+
+```
+"spawns"
+{
+    "1"    "X Y Z pitch yaw roll"
+    "2"    "X Y Z pitch yaw roll"
+    "3"    "X Y Z pitch yaw roll"
+    "4"    "X Y Z pitch yaw roll"
+}
+```
+
+Spawns `1`–`2` are assigned to RED, spawns `3`–`4` to BLU.
+
+#### Team-Split Format
+
+RED and BLU spawn points defined in separate subsections. Required when the two teams have different spawn areas. Works for both 1v1 and 2v2 arenas. Use up to 4 spawns per team for 2v2 arenas so all four players get distinct positions.
+
+```
+"spawns"
+{
+    "red"
+    {
+        "1"    "X Y Z pitch yaw roll"
+        "2"    "X Y Z pitch yaw roll"
+    }
+    "blu"
+    {
+        "1"    "X Y Z pitch yaw roll"
+        "2"    "X Y Z pitch yaw roll"
+    }
+}
+```
+
+#### Class-Specific Format
+
+Spawns further subdivided by class within each team. **Required for `ultiduo` arenas**, which must have separate spawn positions for soldiers and medics on both teams. Class names must be lowercase TF2 class identifiers.
+
+```
+"spawns"
+{
+    "red"
+    {
+        "soldier"
+        {
+            "1"    "X Y Z pitch yaw roll"
+            "2"    "X Y Z pitch yaw roll"
+        }
+        "medic"
+        {
+            "1"    "X Y Z pitch yaw roll"
+            "2"    "X Y Z pitch yaw roll"
+        }
+    }
+    "blu"
+    {
+        "soldier"
+        {
+            "1"    "X Y Z pitch yaw roll"
+            "2"    "X Y Z pitch yaw roll"
+        }
+        "medic"
+        {
+            "1"    "X Y Z pitch yaw roll"
+            "2"    "X Y Z pitch yaw roll"
+        }
+    }
+}
+```
+
+---
+
+### Entities Section
+
+The `entities` block defines world positions for dynamic objects created by certain gamemodes. Coordinates use the format `"X Y Z yaw"` (only the XYZ position is used; yaw is parsed but ignored for most entity types).
+
+```
+"entities"
+{
+    "key"    "X Y Z yaw"
+}
+```
+
+| Key | Required for | Description |
+|-----|-------------|-------------|
+| `hoop_red` | `bball` | Position of the RED team's basketball hoop. |
+| `hoop_blu` | `bball` | Position of the BLU team's basketball hoop. |
+| `intel_start` | `bball` | Starting position of the ball (intelligence item). |
+| `intel_red` | `bball` | Position of the RED intel return zone. |
+| `intel_blu` | `bball` | Position of the BLU intel return zone. |
+| `capture_point` | `koth`, `ultiduo` | Position of the KOTH capture point. |
+
+BBall arenas will fail validation and be skipped if `hoop_red`, `hoop_blu`, or `intel_start` are missing. KOTH and Ultiduo arenas will be skipped if `capture_point` is missing.
+
+---
+
+### Gamemodes
+
+| Value | Description |
+|-------|-------------|
+| `mge` | Standard MGE. First to `frag_limit` kills wins. |
+| `bball` | Basketball. Score by rocketing the ball into the opponent's hoop. Requires a full `entities` block. |
+| `koth` | King of the Hill. Hold the capture point to drain the opponent's timer. Requires `capture_point` in `entities`. |
+| `ammomod` | Ammomod. Disables splash damage; players fire faster and receive high HP. |
+| `midair` | Midair only. Only airborne kills count toward the score. |
+| `endif` | Endif. Players have infinite ammo and no splash damage; kill to score. |
+| `ultiduo` | 2v2 KOTH with Soldier + Medic per team. Requires class-specific spawns (both `soldier` and `medic` subsections under `red` and `blu`) and a `capture_point` entity. |
+| `turris` | Turris. Players continuously regenerate HP while alive. |
+
+---
+
+### Complete Examples
+
+#### Standard 1v1 MGE Arena (flat spawns)
+
+```
+SpawnConfigs
+{
+    "Badlands Middle"
+    {
+        "gamemode"              "mge"
+        "team_size"             "1v1"
+        "frag_limit"            "20"
+        "countdown_seconds"     "3"
+        "allowed_classes"       "soldier demoman scout sniper"
+        "hp_multiplier"         "1.25"
+        "early_leave_threshold" "3"
+        "infinite_ammo"         "0"
+        "show_hp"               "0"
+        "min_spawn_distance"    "550"
+
+        "spawns"
+        {
+            "1"    "-11686 -13377 -773 0"
+            "2"    "-11248 -13521 -773 0"
+            "3"    "-10279 -13526 -773 180"
+            "4"    "-9849  -13380 -773 178"
+        }
+    }
+}
+```
+
+#### 2v2-Switchable Arena (team-split spawns)
+
+```
+SpawnConfigs
+{
+    "Granary Middle"
+    {
+        "gamemode"              "mge"
+        "team_size"             "1v1 2v2"
+        "frag_limit"            "20"
+        "allowed_classes"       "scout soldier demoman sniper"
+        "hp_multiplier"         "1.25"
+        "early_leave_threshold" "3"
+        "infinite_ammo"         "0"
+        "show_hp"               "0"
+        "min_spawn_distance"    "700"
+
+        "spawns"
+        {
+            "red"
+            {
+                "1"    "10035 -4285 -1425 0.0 -45.0 0.0"
+                "2"    "10505 -4275 -1520 0.0 -90.0 0.0"
+            }
+            "blu"
+            {
+                "1"    "10955 -5705 -1425 0.0 135.0 0.0"
+                "2"    "10495 -5700 -1520 0.0  90.0 0.0"
+            }
+        }
+    }
+}
+```
+
+#### BBall Arena (2v2, with entities)
+
+```
+SpawnConfigs
+{
+    "BBall Court 1"
+    {
+        "gamemode"              "bball"
+        "team_size"             "2v2"
+        "frag_limit"            "10"
+        "countdown_seconds"     "1"
+        "allowed_classes"       "soldier"
+        "hp_multiplier"         "1"
+        "early_leave_threshold" "1"
+        "infinite_ammo"         "0"
+        "show_hp"               "0"
+        "respawn_delay"         "2.0"
+        "visible_hoops"         "0"
+
+        "spawns"
+        {
+            "red"
+            {
+                "1"    "100  -960 32 90"
+                "2"    "200  -960 32 90"
+            }
+            "blu"
+            {
+                "1"    "100   960 32 270"
+                "2"    "200   960 32 270"
+            }
+        }
+        "entities"
+        {
+            "intel_start"    "150    0 142 0"
+            "intel_red"      "150  512  96 0"
+            "intel_blu"      "150 -512  96 0"
+            "hoop_red"       "150 -796 135 0"
+            "hoop_blu"       "150  796 135 0"
+        }
+    }
+}
+```
+
+#### KOTH Arena (with capture point)
+
+```
+SpawnConfigs
+{
+    "KOTH Arena"
+    {
+        "gamemode"              "koth"
+        "team_size"             "1v1"
+        "frag_limit"            "2"
+        "countdown_seconds"     "3"
+        "allowed_classes"       "soldier demoman"
+        "hp_multiplier"         "1"
+        "early_leave_threshold" "1"
+        "infinite_ammo"         "0"
+        "show_hp"               "0"
+        "min_spawn_distance"    "400"
+        "koth_round_time"       "120"
+        "respawn_delay"         "5.0"
+
+        "spawns"
+        {
+            "red"
+            {
+                "1"    "500 300 -100 -45"
+                "2"    "600 200 -100 -45"
+            }
+            "blu"
+            {
+                "1"    "500 -300 -100 135"
+                "2"    "600 -200 -100 135"
+            }
+        }
+        "entities"
+        {
+            "capture_point"    "550 0 50 0"
+        }
+    }
+}
+```
+
+#### Ultiduo Arena (class-specific spawns)
+
+```
+SpawnConfigs
+{
+    "Ultiduo"
+    {
+        "gamemode"              "ultiduo"
+        "team_size"             "1v1"
+        "frag_limit"            "2"
+        "countdown_seconds"     "1"
+        "allowed_classes"       "soldier medic"
+        "hp_multiplier"         "1"
+        "early_leave_threshold" "1"
+        "infinite_ammo"         "0"
+        "show_hp"               "0"
+        "respawn_delay"         "10.0"
+
+        "spawns"
+        {
+            "red"
+            {
+                "soldier"
+                {
+                    "1"    "-2512  1040 0 -90"
+                    "2"    "-2560  1040 0 -90"
+                }
+                "medic"
+                {
+                    "1"    "-2608  1040 0 -90"
+                }
+            }
+            "blu"
+            {
+                "soldier"
+                {
+                    "1"    "-2512 -1040 0 90"
+                    "2"    "-2560 -1040 0 90"
+                }
+                "medic"
+                {
+                    "1"    "-2608 -1040 0 90"
+                }
+            }
+        }
+        "entities"
+        {
+            "capture_point"    "-2567 -7 -228 0"
+        }
+    }
+}
+```
+
+---
+
 ## Pending bug fixes and ideas
 
 ### Hot Reload Support
