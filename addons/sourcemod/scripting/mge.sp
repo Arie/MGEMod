@@ -50,7 +50,7 @@
 public Plugin myinfo =
 {
     name        = "MGE",
-    author      = "Originally by Lange & Cprice; based on kAmmomod by Krolus - maintained by sappho.io, PepperKick, and others",
+    author      = "Originally by Lange & Cprice; based on kAmmomod by Krolus - maintained by mge.tf",
     description = "Duel mod for TF2 with realistic game situations.",
     version     =  PL_VERSION,
     url         = "https://github.com/sapphonie/MGEMod"
