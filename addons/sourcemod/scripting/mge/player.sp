@@ -1302,9 +1302,6 @@ Action Timer_WelcomePlayer(Handle timer, int userid)
     }
 
     MC_PrintToChat(client, "%t", "Welcome1", PL_VERSION);
-    if (StrContains(g_sMapName, "mge_", false) == 0)
-        MC_PrintToChat(client, "%t", "Welcome2");
-    MC_PrintToChat(client, "%t", "Welcome3");
 
     return Plugin_Continue;
 }

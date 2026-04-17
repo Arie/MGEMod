@@ -240,24 +240,6 @@
 		"es"			"{green}[MGE]{default} Bienvenido a MGE versión {lightgreen}{1}"
 		"pt"			"{green}[MGE]{default} Bem-vindo a MGE versão {lightgreen}{1}"
 	}
-	"Welcome2"
-	{
-		"en"			"{green}[MGE]{default} Map by: {lightgreen}Swaty and {lightgreen}CB"
-		"chi"			"{green}[MGE]{default} 地图作者：{lightgreen}Swaty{default}、{lightgreen}CB"
-		"de"			"{green}[MGE]{default} Map von: {lightgreen}Swaty, Jstn7477 {default}und {lightgreen}CB"
-		"ru"			"{green}[MGE]{default} Карта создана: {lightgreen}Swaty, Jstn7477 {default}и {lightgreen}CB"
-		"es"			"{green}[MGE]{default} Mapa por: {lightgreen}Swaty, CB"
-		"pt"			"{green}[MGE]{default} Mapa por: {lightgreen}Swaty, CB"
-	}
-	"Welcome3"
-	{
-		"en"			"{green}[MGE]{default} Plugin by: {lightgreen}Lange & Cprice{default}, based on {lightgreen}kAmmomod"
-		"chi"			"{green}[MGE]{default} 插件作者：{lightgreen}Lange、Cprice{default}，汉化：{lightgreen}888"
-		"de"			"{green}[MGE]{default} Plugin von: {lightgreen}Lange{default} und {lightgreen}Cprice{default}, basierend auf {lightgreen}kAmmomod"
-		"ru"			"{green}[MGE]{default} Плагин от: {lightgreen}Lange{default} & {lightgreen}Cprice{default}, созданный на основе {lightgreen}kAmmomod"
-		"es"			"{green}[MGE]{default} Plugin por: {lightgreen}Lange{default} & {lightgreen}Cprice{default}, basado en {lightgreen}kAmmomod"
-		"pt"			"{green}[MGE]{default} Plugin por: {lightgreen}Lange{default} & {lightgreen}Cprice{default}, baseado em {lightgreen}kAmmomod"
-	}
 	"Top5Title"
 	{
 		"en"			"Top 5 Players"
