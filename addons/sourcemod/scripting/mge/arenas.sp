@@ -279,9 +279,10 @@ bool ValidateArenaSchema(int arena)
 
 // ===== PLUGIN CORE LIFECYCLE =====
 
-bool LoadSpawnPoints()
+// Populate g_sMapName with the current map name, converting workshop-prefixed
+// names into their human-readable form so that filesystem lookups work.
+void ResolveCurrentMapName()
 {
-    char txtfile[256];
     GetCurrentMap(g_sMapName, sizeof(g_sMapName));
 
     if (StrContains(g_sMapName, "workshop/", false) != -1)
@@ -289,17 +290,20 @@ bool LoadSpawnPoints()
         char nonWorkshopName[256];
         if (!GetMapDisplayName(g_sMapName, nonWorkshopName, sizeof(nonWorkshopName)))
         {
-            LogError("Failed to convert workshop map name %s to pretty name! This map will probably not work!");
+            LogError("Failed to convert workshop map name %s to pretty name! This map will probably not work!", g_sMapName);
         }
         else
         {
             strcopy(g_sMapName, sizeof(g_sMapName), nonWorkshopName);
         }
     }
+}
 
-    Format(txtfile, sizeof(txtfile), "configs/mge/%s.cfg", g_sMapName);
-    BuildPath(Path_SM, txtfile, sizeof(txtfile), txtfile);
-
+// Parse arena definitions from an explicit path. Separated from
+// LoadSpawnPoints() so the async download path can load a file that does
+// not yet live at the canonical "configs/mge/<mapname>.cfg" location.
+bool LoadSpawnPointsFromFile(const char[] txtfile)
+{
     KeyValues kv = new KeyValues("SpawnConfigs");
 
     g_iArenaCount = 0;
