@@ -13,6 +13,7 @@
 #include <morecolors>
 #include <clientprefs>
 #include <convar_class>
+#include <SteamWorks>
 #include <mge>
 
 #define PL_VERSION "3.1.0-beta17"
@@ -31,6 +32,7 @@
 #include "mge/sql.sp"
 #include "mge/hud.sp"
 #include "mge/arenas.sp"
+#include "mge/spawn_download.sp"
 #include "mge/match.sp"
 #include "mge/player.sp"
 #include "mge/spectator.sp"
@@ -113,6 +115,9 @@ public void OnPluginStart()
     gcvar_2v2Elo = new Convar("mgemod_2v2_elo", "1", "Enable ELO calculation and display for 2v2 matches? (0 = Disabled, 1 = Enabled)", FCVAR_NONE, true, 0.0, true, 1.0);
     gcvar_clearProjectiles = new Convar("mgemod_clear_projectiles", "0", "Clear projectiles when a new round starts? (0 = Disabled, 1 = Enabled)", FCVAR_NONE, true, 0.0, true, 1.0);
     gcvar_allowUnverifiedPlayers = new Convar("mgemod_allow_unverified_players", "0", "Allow players with unverified ELO to play? ELO calculations will be skipped for them. (0 = Block unverified, 1 = Allow but skip ELO)", FCVAR_NONE, true, 0.0, true, 1.0);
+
+    // Spawn config download + near-match fallback. Registers its own cvars.
+    InitSpawnDownload();
 
     // Create config file
     Convar.CreateConfig("mge");
@@ -292,46 +297,10 @@ public void OnMapStart()
 
     g_bNoStats = gcvar_stats.BoolValue ? false : true; /* Reset this variable, since it is forced to false during Event_WinPanel */
 
-    // Spawns
-    bool isMapAm = LoadSpawnPoints();
-    if (isMapAm)
-    {
-        for (int i = 0; i <= g_iArenaCount; i++)
-        {
-            if (g_bArenaBBall[i])
-            {
-                g_iBBallHoop[i][SLOT_ONE] = -1;
-                g_iBBallHoop[i][SLOT_TWO] = -1;
-                g_iBBallIntel[i] = -1;
-            }
-            if (g_bArenaKoth[i])
-            {
-                g_iCapturePoint[i] = -1;
-            }
-        }
-
-        CreateTimer(1.0, Timer_SpecHudToAllArenas, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
-
-        if (g_bAutoCvar)
-        {
-            FindConVar("mp_autoteambalance").SetInt(0);
-            FindConVar("mp_teams_unbalance_limit").SetInt(101);
-            FindConVar("mp_tournament").SetInt(0);
-        }
-
-        HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
-        HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
-        HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Pre);
-        HookEvent("teamplay_round_start", Event_RoundStart, EventHookMode_Post);
-        HookEvent("teamplay_win_panel", Event_WinPanel, EventHookMode_Post);
-        HookEvent("player_team", Event_Suppress, EventHookMode_Pre);
-        HookEvent("player_team", Event_PlayerTeam, EventHookMode_Pre);
-        HookEvent("player_class", Event_Suppress, EventHookMode_Pre);
-
-        AddNormalSoundHook(Sound_BlockSound);
-    } else {
-        SetFailState("Map not supported. MGEMod disabled.");
-    }
+    // Spawns — may finish synchronously (local file) or asynchronously
+    // (SteamWorks download). On success, OnSpawnsLoaded() is called;
+    // on total failure, the plugin fails the map load as before.
+    TryLoadOrDownloadSpawns();
 
     for (int i = 0; i < MAXPLAYERS; i++)
     {
@@ -347,6 +316,47 @@ public void OnMapStart()
         g_fCappedTime[i] = 0.0;
         g_fTotalTime[i] = 0.0;
     }
+}
+
+// Called once the spawn config has been parsed successfully — either
+// synchronously from a local file or asynchronously after a SteamWorks
+// download / near-match fallback. Contains the post-load init that used to
+// live inline in OnMapStart.
+void OnSpawnsLoaded()
+{
+    for (int i = 0; i <= g_iArenaCount; i++)
+    {
+        if (g_bArenaBBall[i])
+        {
+            g_iBBallHoop[i][SLOT_ONE] = -1;
+            g_iBBallHoop[i][SLOT_TWO] = -1;
+            g_iBBallIntel[i] = -1;
+        }
+        if (g_bArenaKoth[i])
+        {
+            g_iCapturePoint[i] = -1;
+        }
+    }
+
+    CreateTimer(1.0, Timer_SpecHudToAllArenas, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+
+    if (g_bAutoCvar)
+    {
+        FindConVar("mp_autoteambalance").SetInt(0);
+        FindConVar("mp_teams_unbalance_limit").SetInt(101);
+        FindConVar("mp_tournament").SetInt(0);
+    }
+
+    HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
+    HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
+    HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Pre);
+    HookEvent("teamplay_round_start", Event_RoundStart, EventHookMode_Post);
+    HookEvent("teamplay_win_panel", Event_WinPanel, EventHookMode_Post);
+    HookEvent("player_team", Event_Suppress, EventHookMode_Pre);
+    HookEvent("player_team", Event_PlayerTeam, EventHookMode_Pre);
+    HookEvent("player_class", Event_Suppress, EventHookMode_Pre);
+
+    AddNormalSoundHook(Sound_BlockSound);
 }
 
 // Clean up resources and unhook events when map ends
