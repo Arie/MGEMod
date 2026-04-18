@@ -77,6 +77,7 @@ void TryLoadOrDownloadSpawns()
     if (FileExists(txtfile))
     {
         LoadOrFail(txtfile);
+        RefreshSpawnConfig(txtfile);
         return;
     }
 
@@ -89,6 +90,51 @@ void TryLoadOrDownloadSpawns()
 
     LogMessage("No local spawn config at %s. SteamWorks extension not loaded, skipping download.", txtfile);
     TryFallbackOrFail();
+}
+
+
+void RefreshSpawnConfig(const char[] localPath)
+{
+    if (!g_bCanDownload)
+        return;
+
+    char url[512];
+    Format(url, sizeof(url), g_sSpawnConfigsUrl, g_sMapName);
+
+    Handle request = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, url);
+    if (request == null)
+        return;
+
+    DataPack pack = new DataPack();
+    pack.WriteString(g_sMapName);
+    pack.WriteString(localPath);
+
+    SteamWorks_SetHTTPRequestContextValue(request, view_as<int>(pack));
+    SteamWorks_SetHTTPCallbacks(request, OnSpawnConfigRefreshComplete);
+    SteamWorks_SendHTTPRequest(request);
+}
+
+
+public void OnSpawnConfigRefreshComplete(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any data)
+{
+    DataPack pack = view_as<DataPack>(data);
+    pack.Reset();
+
+    char mapName[128];
+    char localPath[PLATFORM_MAX_PATH];
+    pack.ReadString(mapName, sizeof(mapName));
+    pack.ReadString(localPath, sizeof(localPath));
+    delete pack;
+
+    if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK)
+    {
+        if (SteamWorks_WriteHTTPResponseBodyToFile(hRequest, localPath))
+        {
+            LogMessage("Refreshed spawn config for %s (applies on next load)", mapName);
+        }
+    }
+
+    CloseHandle(hRequest);
 }
 
 
